@@ -3,18 +3,31 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import ColorThief from 'colorthief';
 import { Artwork } from '../types/artwork';
 import { useStore } from '../store/useStore';
+import { ImageOff } from 'lucide-react';
 
 interface Props {
   artwork: Artwork;
   onClick: () => void;
+  onImageError?: () => void;
+  imageHasError?: boolean;
+  fallbackImage?: string;
 }
 
-const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
+const ArtworkCard: React.FC<Props> = ({ 
+  artwork, 
+  onClick, 
+  onImageError, 
+  imageHasError = false,
+  fallbackImage
+}) => {
   const { lightingMode } = useStore();
   const [dominantColors, setDominantColors] = useState<string[]>([]);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [useFallback, setUseFallback] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
   
   // 3D tilt effect - only use on desktop
   const x = useMotionValue(0);
@@ -27,6 +40,7 @@ const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
   const springRotateX = useSpring(rotateX, springConfig);
   const springRotateY = useSpring(rotateY, springConfig);
 
+  // Handle mouse move for 3D effect
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     if (!cardRef.current || window.innerWidth < 768) return;
     
@@ -48,7 +62,7 @@ const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
 
   // Extract color palette - with performance optimization
   useEffect(() => {
-    if (!imageLoaded || !imgRef.current) return;
+    if (!imageLoaded || !imgRef.current || useFallback || fallbackFailed) return;
     
     const imageElement = imgRef.current; // Get reference to avoid null check issues
     
@@ -64,7 +78,7 @@ const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [imageLoaded]);
+  }, [imageLoaded, useFallback, fallbackFailed]);
 
   // Lighting effect
   const getLightingStyles = () => {
@@ -77,6 +91,41 @@ const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
         return 'brightness-100 contrast-100';
     }
   };
+
+  // Primary image handlers
+  const handleLoad = () => {
+    setIsLoading(false);
+    setImageLoaded(true);
+  };
+
+  const handleError = () => {
+    setIsLoading(false);
+    if (onImageError) {
+      onImageError();
+    }
+    
+    // If fallback is available, try to use it
+    if (fallbackImage && !useFallback) {
+      setUseFallback(true);
+    } else {
+      setFallbackFailed(true);
+    }
+  };
+
+  // Fallback image handlers
+  const handleFallbackLoad = () => {
+    setIsLoading(false);
+    setImageLoaded(true);
+  };
+
+  const handleFallbackError = () => {
+    setIsLoading(false);
+    setFallbackFailed(true);
+    console.error("Fallback image also failed to load");
+  };
+
+  // Determine which image source to use
+  const imageSrc = useFallback && fallbackImage ? fallbackImage : artwork.image;
 
   return (
     <motion.div
@@ -98,18 +147,40 @@ const ArtworkCard: React.FC<Props> = ({ artwork, onClick }) => {
       transition={{ duration: 0.4 }}
     >
       <div className="relative overflow-hidden rounded-xl aspect-[3/4] shadow-lg h-full transition-all duration-300 group-hover:shadow-2xl">
-        <motion.img
-          ref={imgRef}
-          src={artwork.image}
-          alt={artwork.title}
-          className={`w-full h-full object-cover transition-all duration-500 ${getLightingStyles()}`}
-          initial={{ scale: 1 }}
-          whileHover={{ scale: 1.05 }}
-          transition={{ duration: 0.4 }}
-          style={{ transformStyle: "preserve-3d", z: 20 }}
-          onLoad={() => setImageLoaded(true)}
-          loading="lazy"
-        />
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+          </div>
+        )}
+        
+        {fallbackFailed || (imageHasError && !fallbackImage) ? (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-700">
+            <ImageOff className="w-12 h-12 text-gray-400 dark:text-gray-500 mb-2" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">Image could not be loaded</p>
+          </div>
+        ) : (
+          <motion.img
+            ref={imgRef}
+            src={imageSrc}
+            alt={artwork.title}
+            className={`w-full h-full object-cover transition-all duration-500 ${getLightingStyles()} ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+            initial={{ scale: 1 }}
+            whileHover={{ scale: 1.05 }}
+            transition={{ duration: 0.4 }}
+            style={{ transformStyle: "preserve-3d", z: 20 }}
+            onLoad={useFallback ? handleFallbackLoad : handleLoad}
+            onError={useFallback ? handleFallbackError : handleError}
+            loading="lazy"
+            decoding="async" // Add async decoding for better performance
+          />
+        )}
+        
+        {/* Show an indicator if using fallback image */}
+        {useFallback && !fallbackFailed && (
+          <div className="absolute top-0 right-0 bg-orange-500 text-white text-xs px-2 py-1 m-2 rounded-md opacity-70">
+            Fallback
+          </div>
+        )}
         
         {/* Glare effect - only show on hover for better performance */}
         <motion.div 

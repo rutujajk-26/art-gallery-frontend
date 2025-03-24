@@ -220,7 +220,10 @@ const Exhibition3D: React.FC = () => {
       }
     };
     
-    animate();
+    // Only start animation if all components are initialized
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      animate();
+    }
     
     // Resize handler
     const handleResize = () => {
@@ -234,9 +237,17 @@ const Exhibition3D: React.FC = () => {
     window.addEventListener('resize', handleResize);
     
     // Audio setup
-    const audio = new Audio('/audio/exhibition-ambient.mp3');
+    const audio = new Audio();
+    audio.src = '/audio/exhibition-ambient.mp3';
     audio.loop = true;
     audio.volume = 0.3;
+    
+    // Add error handling for audio
+    audio.addEventListener('error', (e) => {
+      console.warn('Audio error:', e);
+      // Continue without audio if there's an issue
+    });
+    
     audioRef.current = audio;
     
     // Cleanup
@@ -650,7 +661,7 @@ const Exhibition3D: React.FC = () => {
   }, [currentArtworkIndex, exhibitionState, selectedCategory]);
   
   return (
-    <div className="relative w-full h-screen bg-[#0a0a1a]">
+    <div className="relative w-full h-screen min-h-[600px] bg-[#0a0a1a]">
       {/* 3D scene container */}
       <div ref={mountRef} className="absolute inset-0" />
       

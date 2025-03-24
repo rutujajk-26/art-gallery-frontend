@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { Link, useNavigate } from 'react-router-dom';
 
 // Navigation item component to optimize re-renders
 const NavItem = memo(({ 
@@ -13,27 +14,28 @@ const NavItem = memo(({
   isDarkMode: boolean;
   onClick?: () => void;
 }) => (
-  <motion.a
+  <motion.div
     whileHover={{ 
       scale: 1.05,
       backgroundColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
     }}
     whileTap={{ scale: 0.95 }}
     className={`
-      px-4 py-2 text-sm font-medium rounded-full
+      px-4 py-2 text-sm font-medium rounded-full cursor-pointer
       ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-900'}
     `}
-    href={`#${item.toLowerCase()}`}
-    onClick={onClick}
   >
-    {item}
-  </motion.a>
+    <Link to={`/${item.toLowerCase() === 'home' ? '' : item.toLowerCase().replace(/\s+/g, '-')}`} onClick={onClick}>
+      {item}
+    </Link>
+  </motion.div>
 ));
 
 const Navbar = () => {
   const { isDarkMode } = useStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   const navItems = ['Home', 'Gallery', 'Exhibitions', '3D Exhibition', 'About', 'Contact'];
   
@@ -64,21 +66,14 @@ const Navbar = () => {
 
   // Handle navigation click with smooth scrolling
   const handleNavClick = (section: string) => {
-    const sectionId = section.toLowerCase().replace(/\s+/g, '-');
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-      setIsMobileMenuOpen(false); // Close mobile menu if open
-    }
+    setIsMobileMenuOpen(false); // Close mobile menu if open
+    navigate(section.toLowerCase() === 'home' ? '/' : `/${section.toLowerCase().replace(/\s+/g, '-')}`);
   };
 
   // Handle "Get Started" button click
   const handleGetStarted = () => {
-    const gallerySection = document.getElementById('gallery');
-    if (gallerySection) {
-      gallerySection.scrollIntoView({ behavior: 'smooth' });
-      setIsMobileMenuOpen(false);
-    }
+    setIsMobileMenuOpen(false);
+    navigate('/gallery');
   };
   
   return (
@@ -91,18 +86,19 @@ const Navbar = () => {
       >
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16 md:h-20">
-            <motion.a
-              href="#home"
-              whileHover={{ scale: 1.05 }}
-              className="flex items-center"
-            >
-              <span className="text-2xl md:text-3xl font-bold tracking-tight">
-                Art
-                <span className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                  Vistas
+            <Link to="/">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="flex items-center cursor-pointer"
+              >
+                <span className="text-2xl md:text-3xl font-bold tracking-tight">
+                  Art
+                  <span className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                    Vistas
+                  </span>
                 </span>
-              </span>
-            </motion.a>
+              </motion.div>
+            </Link>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2">
@@ -180,12 +176,12 @@ const Navbar = () => {
               
               <div className="p-5 space-y-1">
                 {navItems.map((item) => (
-                  <motion.button
+                  <motion.div
                     key={item}
                     whileHover={{ x: 5 }}
                     whileTap={{ scale: 0.98 }}
                     className={`
-                      flex items-center justify-between w-full p-3 rounded-lg text-left
+                      flex items-center justify-between w-full p-3 rounded-lg text-left cursor-pointer
                       ${isDarkMode 
                         ? 'text-gray-200 hover:bg-gray-800' 
                         : 'text-gray-800 hover:bg-gray-100'
@@ -195,7 +191,7 @@ const Navbar = () => {
                   >
                     {item}
                     <ChevronRight className="w-4 h-4 opacity-50" />
-                  </motion.button>
+                  </motion.div>
                 ))}
               </div>
               

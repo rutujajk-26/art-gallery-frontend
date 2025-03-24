@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, useScroll, useTransform, useSpring, useMotionValue } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import { ArrowRight, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // Using artwork data from various parts of the app
 // These would normally be imported from a central data source
@@ -81,6 +82,7 @@ const Hero = () => {
   const heroRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [randomArtworks, setRandomArtworks] = useState<any[]>([]);
+  const navigate = useNavigate();
   
   // For parallax effects
   const { scrollYProgress } = useScroll({
@@ -122,12 +124,21 @@ const Hero = () => {
     setRandomArtworks(shuffled.slice(0, 6));
   }, []);
   
-  // Scroll to gallery section when "Let's Explore" is clicked
-  const handleExploreClick = () => {
-    const gallerySection = document.getElementById('gallery');
-    if (gallerySection) {
-      gallerySection.scrollIntoView({ behavior: 'smooth' });
+  // Video filter based on lighting mode
+  const getVideoFilter = useCallback(() => {
+    switch (lightingMode) {
+      case 'dim':
+        return 'brightness(0.6) contrast(1.1)';
+      case 'spotlight':
+        return 'brightness(0.8) contrast(1.3) saturate(1.2)';
+      default:
+        return isDarkMode ? 'brightness(0.7)' : 'brightness(1)';
     }
+  }, [lightingMode, isDarkMode]);
+  
+  // Navigate to gallery when clicked
+  const handleExploreClick = () => {
+    navigate('/gallery');
   };
 
   return (
@@ -150,7 +161,7 @@ const Hero = () => {
             playsInline
             className="w-full h-full object-cover"
             style={{ 
-              filter: isDarkMode ? 'brightness(0.6)' : 'brightness(0.8)' 
+              filter: getVideoFilter()
             }}
           >
             {/* Using a reliable video source */}
