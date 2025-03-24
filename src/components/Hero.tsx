@@ -1,10 +1,12 @@
 import React, { useRef, useCallback } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useStore } from '../store/useStore';
+import { useNavigate } from 'react-router-dom';
 
 const Hero = () => {
   const { isDarkMode, lightingMode } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -27,12 +29,9 @@ const Hero = () => {
     }
   }, [lightingMode, isDarkMode]);
 
-  // Scroll to gallery section when "Start Exploring" is clicked
+  // Navigate to gallery when "Start Exploring" is clicked
   const handleExploreClick = () => {
-    const gallerySection = document.getElementById('gallery');
-    if (gallerySection) {
-      gallerySection.scrollIntoView({ behavior: 'smooth' });
-    }
+    navigate('/gallery');
   };
 
   return (
