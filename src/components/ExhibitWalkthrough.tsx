@@ -398,6 +398,28 @@ const ExhibitWalkthrough = () => {
             Choose an Exhibition
           </motion.h2>
           
+          {/* New 3D Exhibition button */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="mb-12 flex justify-center"
+          >
+            <a 
+              href="#3d-exhibition" 
+              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
+            >
+              <span className="relative">
+                <span className="absolute inset-0 blur-sm bg-white opacity-30 animate-pulse rounded-full"></span>
+                <span className="relative">✨</span>
+              </span>
+              Experience our NEW 3D Virtual Exhibition
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </a>
+          </motion.div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {exhibitionCategories.map((category, index) => (
               <motion.div
@@ -453,6 +475,22 @@ const ExhibitWalkthrough = () => {
           >
             ← Back to Exhibitions
           </motion.button>
+        </div>
+        
+        {/* 3D Exhibition link */}
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-40">
+          <motion.a
+            href="#3d-exhibition"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-full flex items-center gap-1"
+          >
+            <span>✨</span>
+            Try 3D Exhibition
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </motion.a>
         </div>
         
         {/* Audio toggle */}

@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Gallery from './components/Gallery';
 import ExhibitWalkthrough from './components/ExhibitWalkthrough';
+import Exhibition3D from './components/Exhibition3D';
 import LightingControls from './components/LightingControls';
 import { useLenis } from './hooks/useLenis';
 import { useStore } from './store/useStore';
@@ -48,6 +49,10 @@ function App() {
               <ExhibitWalkthrough />
             </section>
             
+            <section id="3d-exhibition">
+              <Exhibition3D />
+            </section>
+            
             {/* Footer */}
             <footer className={`py-12 px-4 ${
               isDarkMode ? 'bg-gray-950 text-gray-300' : 'bg-gray-100 text-gray-700'
@@ -64,9 +69,12 @@ function App() {
                   <div>
                     <h4 className="font-medium mb-4">Explore</h4>
                     <ul className="space-y-2">
-                      {['Home', 'Gallery', 'Exhibitions', 'Artists', 'Collections'].map(item => (
+                      {['Home', 'Gallery', 'Exhibitions', '3D Exhibition'].map(item => (
                         <li key={item}>
-                          <a href={`#${item.toLowerCase()}`} className="opacity-70 hover:opacity-100 transition-opacity">
+                          <a 
+                            href={`#${item.toLowerCase().replace(/\s+/g, '-')}`} 
+                            className="opacity-70 hover:opacity-100 transition-opacity"
+                          >
                             {item}
                           </a>
                         </li>
@@ -77,9 +85,12 @@ function App() {
                   <div>
                     <h4 className="font-medium mb-4">Information</h4>
                     <ul className="space-y-2">
-                      {['About', 'Contact', 'FAQ', 'Terms', 'Privacy'].map(item => (
+                      {['About', 'Contact', 'FAQ', 'Privacy'].map(item => (
                         <li key={item}>
-                          <a href={`#${item.toLowerCase()}`} className="opacity-70 hover:opacity-100 transition-opacity">
+                          <a 
+                            href={`#${item.toLowerCase()}`} 
+                            className="opacity-70 hover:opacity-100 transition-opacity"
+                          >
                             {item}
                           </a>
                         </li>
@@ -95,6 +106,7 @@ function App() {
                           key={social}
                           href={`#${social.toLowerCase()}`}
                           className="w-10 h-10 rounded-full flex items-center justify-center border border-current opacity-70 hover:opacity-100 transition-opacity"
+                          aria-label={social}
                         >
                           {social.charAt(0)}
                         </a>

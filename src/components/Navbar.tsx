@@ -35,7 +35,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = ['Home', 'Gallery', 'Exhibitions', 'About', 'Contact'];
+  const navItems = ['Home', 'Gallery', 'Exhibitions', '3D Exhibition', 'About', 'Contact'];
   
   // Optimized scroll handler
   useEffect(() => {
@@ -64,7 +64,8 @@ const Navbar = () => {
 
   // Handle navigation click with smooth scrolling
   const handleNavClick = (section: string) => {
-    const element = document.getElementById(section.toLowerCase());
+    const sectionId = section.toLowerCase().replace(/\s+/g, '-');
+    const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
       setIsMobileMenuOpen(false); // Close mobile menu if open
