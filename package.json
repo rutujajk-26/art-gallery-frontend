@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "bash ./vercel-prebuild.sh",
+    "fix-rollup": "node rollup-fix.js",
+    "prebuild": "npm run fix-rollup",
     "build": "tsc && vite build",
+    "vercel-build": "npm run fix-rollup && tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "postinstall": "echo 'Skipping rollup setup for deployment environment'"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
@@ -47,6 +48,6 @@
     "vite": "^5.1.4"
   },
   "engines": {
-    "node": "18.x || 20.x"
+    "node": "16.x || 18.x || 20.x"
   }
 }
