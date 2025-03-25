@@ -14,8 +14,12 @@ export default defineConfig({
     minify: 'esbuild',
     outDir: 'dist', // Ensures Netlify deploys the right folder
     assetsDir: 'assets', // Organizes assets properly
+    // Ensures proper MIME types by being explicit about file extensions
     rollupOptions: {
       output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
