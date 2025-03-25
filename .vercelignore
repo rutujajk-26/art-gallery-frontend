@@ -1,0 +1,13 @@
+README.md
+.git
+.github
+node_modules
+.vscode
+*.log
+Dockerfile
+docker-compose.yml
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local 
