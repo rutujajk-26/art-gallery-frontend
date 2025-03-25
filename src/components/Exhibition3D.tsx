@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import gsap from 'gsap';
 import { motion } from 'framer-motion';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, ArrowRight, Volume2, VolumeX, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Volume2, VolumeX, Info, Sparkles, MessageSquare, Headphones } from 'lucide-react';
+import { getArtworkInsights, getArtworkVoiceResponse, getSimilarArtworkRecommendations } from '../utils/geminiApi';
 
 // Art categories
 const artCategories = [
@@ -113,6 +114,9 @@ const artworks = {
 // Types
 type ExhibitionState = 'entrance' | 'category-selection' | 'exhibition-hall';
 
+// Global texture cache
+const textureCache = new Map<string, THREE.Texture>();
+
 const Exhibition3D: React.FC = () => {
   // Core refs for THREE.js
   const mountRef = useRef<HTMLDivElement>(null);
@@ -131,6 +135,16 @@ const Exhibition3D: React.FC = () => {
   const [showArtworkInfo, setShowArtworkInfo] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { isDarkMode } = useStore();
+  
+  // AI-related state
+  const [aiInsights, setAiInsights] = useState<string>('');
+  const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
+  const [aiVoiceResponse, setAiVoiceResponse] = useState<string>('');
+  const [isLoadingVoice, setIsLoadingVoice] = useState<boolean>(false);
+  const [isPlayingVoice, setIsPlayingVoice] = useState<boolean>(false);
+  const [similarArtworkIds, setSimilarArtworkIds] = useState<string[]>([]);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState<boolean>(false);
+  const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
   
   // Materials for the 3D scene
   const materials = useMemo(() => ({
@@ -250,36 +264,73 @@ const Exhibition3D: React.FC = () => {
     
     audioRef.current = audio;
     
-    // Cleanup
+    // Cleanup function
     return () => {
-      cancelAnimationFrame(frameIdRef.current);
       window.removeEventListener('resize', handleResize);
       
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+      }
+      
+      // Dispose renderer
       if (rendererRef.current && mountRef.current) {
-        // Dispose resources
-        scene.traverse((object) => {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+        rendererRef.current.dispose();
+      }
+      
+      // Clear scene
+      if (sceneRef.current) {
+        sceneRef.current.traverse((object) => {
           if (object instanceof THREE.Mesh) {
-            if (object.geometry) object.geometry.dispose();
+            if (object.geometry) {
+              object.geometry.dispose();
+            }
+            
             if (object.material) {
               if (Array.isArray(object.material)) {
-                object.material.forEach(material => material.dispose());
+                object.material.forEach(material => {
+                  disposeMaterial(material);
+                });
               } else {
-                object.material.dispose();
+                disposeMaterial(object.material);
               }
             }
           }
         });
-        
-        renderer.dispose();
-        mountRef.current.removeChild(rendererRef.current.domElement);
       }
       
+      // Clean up audio
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
     };
-  }, [materials]);
+  }, []);
+  
+  // Helper function to dispose materials
+  const disposeMaterial = (material: THREE.Material) => {
+    // Cast to MeshBasicMaterial or MeshStandardMaterial which have maps
+    if (material instanceof THREE.MeshBasicMaterial || material instanceof THREE.MeshStandardMaterial) {
+      if (material.map) material.map.dispose();
+    }
+    
+    // Cast to relevant material types for specific properties
+    if (material instanceof THREE.MeshStandardMaterial) {
+      if (material.lightMap) material.lightMap.dispose();
+      if (material.aoMap) material.aoMap.dispose();
+      if (material.emissiveMap) material.emissiveMap.dispose();
+      if (material.bumpMap) material.bumpMap.dispose();
+      if (material.normalMap) material.normalMap.dispose();
+      if (material.displacementMap) material.displacementMap.dispose();
+      if (material.roughnessMap) material.roughnessMap.dispose();
+      if (material.metalnessMap) material.metalnessMap.dispose();
+      if (material.alphaMap) material.alphaMap.dispose();
+      if (material.envMap) material.envMap.dispose();
+    }
+    
+    // Always dispose the material itself
+    material.dispose();
+  };
   
   // Toggle audio
   const toggleAudio = () => {
@@ -298,7 +349,169 @@ const Exhibition3D: React.FC = () => {
   // Toggle artwork info panel
   const toggleArtworkInfo = () => {
     setShowArtworkInfo(prev => !prev);
+    
+    // If showing the panel, fetch AI insights for the current artwork
+    if (!showArtworkInfo && selectedCategory) {
+      fetchAiInsights();
+      fetchSimilarArtworks();
+    }
   };
+  
+  // Fetch AI insights about current artwork
+  const fetchAiInsights = async () => {
+    if (!selectedCategory) return;
+    
+    const currentArtwork = artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex];
+    setIsLoadingInsights(true);
+    
+    try {
+      const insights = await getArtworkInsights(currentArtwork);
+      setAiInsights(insights);
+    } catch (error) {
+      console.error('Error fetching AI insights:', error);
+      setAiInsights('I couldn\'t generate insights for this artwork at the moment.');
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  };
+  
+  // Fetch similar artworks based on the current one
+  const fetchSimilarArtworks = async () => {
+    if (!selectedCategory) return;
+    
+    const currentArtwork = artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex];
+    setIsLoadingRecommendations(true);
+    
+    try {
+      // Get all artworks from the current category
+      const categoryArtworks = artworks[selectedCategory as keyof typeof artworks];
+      
+      // Generate recommendations
+      const recommendedIds = await getSimilarArtworkRecommendations(
+        currentArtwork,
+        categoryArtworks.map(art => ({ ...art }))
+      );
+      
+      setSimilarArtworkIds(recommendedIds);
+    } catch (error) {
+      console.error('Error fetching similar artworks:', error);
+      setSimilarArtworkIds([]);
+    } finally {
+      setIsLoadingRecommendations(false);
+    }
+  };
+  
+  // Handle AI voice guidance
+  const handleAiVoiceGuidance = async () => {
+    if (!selectedCategory) return;
+    
+    if (isPlayingVoice) {
+      // Stop current voice playback
+      window.speechSynthesis.cancel();
+      setIsPlayingVoice(false);
+      return;
+    }
+    
+    const currentArtwork = artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex];
+    setIsLoadingVoice(true);
+    
+    try {
+      // If we already have a response for this artwork, use it
+      if (!aiVoiceResponse) {
+        const response = await getArtworkVoiceResponse(currentArtwork);
+        setAiVoiceResponse(response);
+      }
+      
+      // Use Speech Synthesis to speak the response
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(aiVoiceResponse || 'Loading AI response...');
+        
+        // Configure voice settings for more natural sound
+        utterance.rate = 0.9; // Slightly slower
+        utterance.pitch = 1.0; // Natural pitch
+        
+        // Get available voices and try to select a good one
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(
+          voice => voice.lang === 'en-US' && voice.name.includes('Female')
+        );
+        
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+        }
+        
+        // Handle speech end
+        utterance.onend = () => {
+          setIsPlayingVoice(false);
+        };
+        
+        speechSynthRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+        setIsPlayingVoice(true);
+      } else {
+        console.warn('Speech synthesis not supported in this browser');
+      }
+    } catch (error) {
+      console.error('Error with AI voice guidance:', error);
+    } finally {
+      setIsLoadingVoice(false);
+    }
+  };
+  
+  // Go to specific artwork by ID
+  const goToArtworkById = (artworkId: string) => {
+    if (!selectedCategory) return;
+    
+    const categoryArtworks = artworks[selectedCategory as keyof typeof artworks];
+    const index = categoryArtworks.findIndex(art => art.id === artworkId);
+    
+    if (index !== -1) {
+      // Save camera position before changing artwork
+      const cameraPos = cameraRef.current?.position.clone();
+      
+      // Pre-highlight the next artwork before state change to prevent flicker
+      updateArtworkHighlight(index);
+      
+      // Update the state
+      setCurrentArtworkIndex(index);
+      
+      // Show info panel automatically
+      setShowArtworkInfo(true);
+      
+      // Restore camera position if needed
+      if (cameraPos && cameraRef.current) {
+        cameraRef.current.position.copy(cameraPos);
+      }
+      
+      // Fetch new insights and recommendations
+      fetchAiInsights();
+      fetchSimilarArtworks();
+    }
+  };
+  
+  // Reset AI state when changing artworks
+  useEffect(() => {
+    if (selectedCategory) {
+      setAiInsights('');
+      setAiVoiceResponse('');
+      setSimilarArtworkIds([]);
+      
+      // Stop any ongoing speech
+      if (isPlayingVoice) {
+        window.speechSynthesis.cancel();
+        setIsPlayingVoice(false);
+      }
+    }
+  }, [currentArtworkIndex, selectedCategory]);
+  
+  // Clean up speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (speechSynthRef.current) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
   
   // Go to next artwork with fixed camera
   const goToNextArtwork = useCallback(() => {
@@ -596,6 +809,90 @@ const Exhibition3D: React.FC = () => {
         artworkFramesRef.current.push(frame);
         scene.add(frame);
         
+        // Create a temporary placeholder while image loads
+        const placeholderMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x262626,
+          transparent: true,
+          opacity: 0.7
+        });
+        const placeholderArt = new THREE.Mesh(geometries.artwork, placeholderMaterial);
+        placeholderArt.position.z = 0.06;
+        frame.add(placeholderArt);
+        
+        // Add loading indicator
+        const loadingGeometry = new THREE.RingGeometry(0.5, 0.6, 32);
+        const loadingMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x9c27b0,
+          transparent: true,
+          opacity: 0.8,
+          side: THREE.DoubleSide
+        });
+        const loadingRing = new THREE.Mesh(loadingGeometry, loadingMaterial);
+        loadingRing.position.z = 0.07;
+        loadingRing.name = 'loadingIndicator';
+        frame.add(loadingRing);
+        
+        // Animate loading indicator
+        gsap.to(loadingRing.rotation, {
+          z: Math.PI * 2,
+          duration: 1.5,
+          repeat: -1,
+          ease: 'none'
+        });
+        
+        // Check texture cache first
+        if (textureCache.has(artwork.image)) {
+          console.log(`Using cached texture for: ${artwork.image}`);
+          
+          // Remove placeholder and loading indicator
+          frame.remove(placeholderArt);
+          const loadingIndicator = frame.children.find(child => child.name === 'loadingIndicator');
+          if (loadingIndicator) {
+            frame.remove(loadingIndicator);
+          }
+          
+          // Use cached texture
+          const cachedTexture = textureCache.get(artwork.image)!;
+          const artMaterial = new THREE.MeshBasicMaterial({
+            map: cachedTexture
+          });
+          
+          const art = new THREE.Mesh(geometries.artwork, artMaterial);
+          art.position.z = 0.06;
+          art.name = 'artwork';
+          
+          frame.add(art);
+          
+          // Add glow to first artwork
+          if (index === 0) {
+            const glowMaterial = new THREE.MeshBasicMaterial({
+              color: 0x9c27b0, // Purple glow
+              transparent: true,
+              opacity: 0.3
+            });
+            
+            const glowMesh = new THREE.Mesh(
+              new THREE.BoxGeometry(4.5, 3.5, 0.2),
+              glowMaterial
+            );
+            
+            glowMesh.position.z = -0.1;
+            glowMesh.name = 'glow';
+            frame.add(glowMesh);
+            
+            // Animate glow
+            gsap.to(glowMaterial, {
+              opacity: 0.5,
+              duration: 1.5,
+              repeat: -1,
+              yoyo: true,
+              ease: 'sine.inOut'
+            });
+          }
+          
+          return; // Skip loading image
+        }
+        
         // Create artwork texture
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -606,12 +903,23 @@ const Exhibition3D: React.FC = () => {
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           
+          // Add to texture cache
+          textureCache.set(artwork.image, texture);
+          
           const artMaterial = new THREE.MeshBasicMaterial({
             map: texture
           });
           
+          // Remove placeholder and loading indicator
+          frame.remove(placeholderArt);
+          const loadingIndicator = frame.children.find(child => child.name === 'loadingIndicator');
+          if (loadingIndicator) {
+            frame.remove(loadingIndicator);
+          }
+          
           const art = new THREE.Mesh(geometries.artwork, artMaterial);
           art.position.z = 0.06;
+          art.name = 'artwork';
           
           frame.add(art);
           
@@ -643,6 +951,91 @@ const Exhibition3D: React.FC = () => {
           }
         };
         
+        img.onerror = function() {
+          console.warn(`Failed to load image: ${artwork.image}`);
+          
+          // Remove loading indicator
+          const loadingIndicator = frame.children.find(child => child.name === 'loadingIndicator');
+          if (loadingIndicator) {
+            frame.remove(loadingIndicator);
+          }
+          
+          // Remove placeholder
+          frame.remove(placeholderArt);
+          
+          // Create error texture with text
+          const canvas = document.createElement('canvas');
+          canvas.width = 384;
+          canvas.height = 280;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            // Draw error background
+            ctx.fillStyle = '#262626';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw border
+            ctx.strokeStyle = '#9c27b0';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+            
+            // Draw text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(artwork.title, canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = '18px Arial';
+            ctx.fillText('Image failed to load', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText('by ' + artwork.artist, canvas.width / 2, canvas.height / 2 + 40);
+          }
+          
+          const errorTexture = new THREE.CanvasTexture(canvas);
+          const errorMaterial = new THREE.MeshBasicMaterial({ map: errorTexture });
+          const errorArt = new THREE.Mesh(geometries.artwork, errorMaterial);
+          errorArt.position.z = 0.06;
+          errorArt.name = 'artwork-error';
+          
+          frame.add(errorArt);
+          
+          // Add glow to first artwork even if it fails to load
+          if (index === 0) {
+            const glowMaterial = new THREE.MeshBasicMaterial({
+              color: 0x9c27b0, // Purple glow
+              transparent: true,
+              opacity: 0.3
+            });
+            
+            const glowMesh = new THREE.Mesh(
+              new THREE.BoxGeometry(4.5, 3.5, 0.2),
+              glowMaterial
+            );
+            
+            glowMesh.position.z = -0.1;
+            glowMesh.name = 'glow';
+            frame.add(glowMesh);
+            
+            // Animate glow
+            gsap.to(glowMaterial, {
+              opacity: 0.5,
+              duration: 1.5,
+              repeat: -1,
+              yoyo: true,
+              ease: 'sine.inOut'
+            });
+          }
+        };
+        
+        // Set a timeout to detect stalled image loads
+        const imageLoadTimeout = setTimeout(() => {
+          // If image hasn't loaded or errored after 10 seconds, trigger error handler
+          if (!img.complete && typeof img.onerror === 'function') {
+            const timeoutEvent = new Event('timeout');
+            img.onerror(timeoutEvent);
+          }
+        }, 10000);
+        
+        // Start loading the image
         img.src = artwork.image;
       });
     }
@@ -689,17 +1082,27 @@ const Exhibition3D: React.FC = () => {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="text-4xl md:text-5xl font-bold mb-8 text-center z-10 text-white"
           >
-            3D Art Exhibition
+            AI-Powered 3D Art Exhibition
           </motion.h1>
+          
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 1.0 }}
+            className="text-xl text-center max-w-md z-10 text-white mb-8"
+          >
+            Experience art with AI voice guidance, insights, and personalized recommendations
+          </motion.p>
           
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.2 }}
             onClick={startTour}
-            className="px-6 py-3 bg-indigo-800 hover:bg-indigo-700 text-white rounded-full text-lg font-medium z-10"
+            className="px-6 py-3 bg-indigo-800 hover:bg-indigo-700 text-white rounded-full text-lg font-medium z-10 flex items-center"
           >
-            Start Your Tour
+            <Sparkles className="w-5 h-5 mr-2" />
+            Start Your AI-Guided Tour
           </motion.button>
         </div>
       )}
@@ -708,9 +1111,13 @@ const Exhibition3D: React.FC = () => {
       {exhibitionState === 'category-selection' && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="bg-[#0a0a1a]/80 border-2 border-purple-900 backdrop-blur-sm rounded-xl p-8 max-w-3xl">
-            <h2 className="text-2xl font-bold mb-6 text-white text-center">
+            <h2 className="text-2xl font-bold mb-2 text-white text-center">
               Select an Art Category
             </h2>
+            
+            <p className="text-center text-indigo-300 mb-6">
+              Our AI will provide insights and recommendations as you explore
+            </p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {artCategories.map((category) => (
@@ -734,9 +1141,9 @@ const Exhibition3D: React.FC = () => {
       {/* Exhibition Hall UI */}
       {exhibitionState === 'exhibition-hall' && selectedCategory && (
         <>
-          {/* Info panel with image */}
+          {/* Info panel with image and AI insights */}
           {showArtworkInfo && (
-            <div className="absolute right-4 top-36 w-96 bg-[#0a0a1a]/90 backdrop-blur-sm rounded-lg border border-purple-900 p-4 z-20">
+            <div className="absolute right-4 top-36 w-96 max-h-[70vh] overflow-y-auto bg-[#0a0a1a]/90 backdrop-blur-sm rounded-lg border border-purple-900 p-4 z-20">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-xl font-bold text-purple-400">
                   {artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex].title}
@@ -763,9 +1170,98 @@ const Exhibition3D: React.FC = () => {
                 <span className="opacity-80"> {artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex].year}</span>
               </p>
               
-              <p className="text-gray-300 text-sm">
+              <p className="text-gray-300 text-sm mb-4">
                 {artworks[selectedCategory as keyof typeof artworks][currentArtworkIndex].description}
               </p>
+              
+              {/* AI Voice Guide Button */}
+              <button
+                onClick={handleAiVoiceGuidance}
+                disabled={isLoadingVoice}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 mb-4 bg-indigo-900/50 hover:bg-indigo-900/80 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+              >
+                {isPlayingVoice ? (
+                  <>
+                    <VolumeX className="w-4 h-4" />
+                    Stop AI Voice Guide
+                  </>
+                ) : isLoadingVoice ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                    Loading Voice...
+                  </>
+                ) : (
+                  <>
+                    <Headphones className="w-4 h-4" />
+                    Listen to AI Voice Guide
+                  </>
+                )}
+              </button>
+              
+              {/* AI Insights Section */}
+              <div className="mb-4">
+                <h4 className="text-indigo-400 text-sm font-semibold flex items-center mb-2">
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  AI Art Insights
+                </h4>
+                <div className="border border-indigo-900/50 rounded-lg p-3 bg-indigo-950/30">
+                  {isLoadingInsights ? (
+                    <div className="flex items-center justify-center py-3">
+                      <div className="w-5 h-5 border-2 border-t-transparent border-indigo-400 rounded-full animate-spin"></div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-300 italic">
+                      {aiInsights || "Tap the info button to generate AI insights about this artwork."}
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              {/* AI Recommendations Section */}
+              <div>
+                <h4 className="text-indigo-400 text-sm font-semibold flex items-center mb-2">
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  Similar Artworks You Might Like
+                </h4>
+                <div className="border border-indigo-900/50 rounded-lg p-3 bg-indigo-950/30">
+                  {isLoadingRecommendations ? (
+                    <div className="flex items-center justify-center py-3">
+                      <div className="w-5 h-5 border-2 border-t-transparent border-indigo-400 rounded-full animate-spin"></div>
+                    </div>
+                  ) : similarArtworkIds.length > 0 ? (
+                    <div className="space-y-2">
+                      {similarArtworkIds.map(id => {
+                        const artwork = artworks[selectedCategory as keyof typeof artworks].find(art => art.id === id);
+                        if (!artwork) return null;
+                        
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => goToArtworkById(id)}
+                            className="w-full text-left p-2 hover:bg-indigo-900/30 rounded-lg flex items-center gap-2 transition-colors"
+                          >
+                            <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0">
+                              <img 
+                                src={artwork.image} 
+                                alt={artwork.title}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-indigo-200 text-xs font-medium">{artwork.title}</p>
+                              <p className="text-gray-400 text-xs">{artwork.artist}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-300">
+                      Explore more artworks to get personalized recommendations.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
           
@@ -781,10 +1277,10 @@ const Exhibition3D: React.FC = () => {
             
             <button
               onClick={toggleArtworkInfo}
-              className="px-5 py-3 bg-indigo-800/90 backdrop-blur-sm rounded-full text-white hover:bg-indigo-700/90"
+              className="px-5 py-3 bg-indigo-800/90 backdrop-blur-sm rounded-full text-white hover:bg-indigo-700/90 flex items-center"
             >
               <Info size={16} className="inline mr-2" />
-              {showArtworkInfo ? "Hide Info" : "Show Info"}
+              {showArtworkInfo ? "Hide Info" : "Show AI Insights"}
             </button>
             
             <button
@@ -805,7 +1301,7 @@ const Exhibition3D: React.FC = () => {
           </button>
           
           {/* Artwork counter */}
-          <div className="absolute top-24 right-1/2 transform translate-x-1/2 px-4 py-2 bg-indigo-900/80 backdrop-blur-sm rounded-full text-white text-sm z-10">
+          <div className="absolute top-24 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-indigo-900/80 backdrop-blur-sm rounded-full text-white text-sm z-10">
             {currentArtworkIndex + 1} / {selectedCategory ? artworks[selectedCategory as keyof typeof artworks].length : 0}
           </div>
         </>

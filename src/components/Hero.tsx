@@ -153,12 +153,12 @@ const Hero = () => {
             y: videoY,
           }}
         >
-          <video 
+      <video
             ref={videoRef}
-            autoPlay 
-            loop 
-            muted 
-            playsInline
+        autoPlay
+        loop
+        muted
+        playsInline
             className="w-full h-full object-cover"
             style={{ 
               filter: getVideoFilter()
@@ -172,8 +172,8 @@ const Hero = () => {
               alt="Art Gallery" 
               className="w-full h-full object-cover" 
             />
-          </video>
-          
+      </video>
+
           {/* Gradient overlay */}
           <div className={`absolute inset-0 bg-gradient-to-b ${
             isDarkMode 
@@ -225,32 +225,32 @@ const Hero = () => {
               rotateY: mouseX,
             }}
           >
-            <motion.h1 
+        <motion.h1
               className="text-5xl md:text-7xl font-bold mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-            >
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
               <span className="block">Art<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-600">Vistas</span></span>
-            </motion.h1>
-            
-            <motion.p 
+        </motion.h1>
+        
+        <motion.p
               className="text-xl md:text-2xl mb-8 mx-auto max-w-3xl"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            >
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
               Immerse yourself in a world where art transcends physical boundaries. Experience our virtual gallery from anywhere in the world.
-            </motion.p>
-            
-            <motion.button
+        </motion.p>
+
+        <motion.button
               className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-full font-medium flex items-center mx-auto space-x-2 group relative overflow-hidden"
               onClick={handleExploreClick}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
             >
               {/* Button background glow effect */}
               <motion.div 
@@ -476,9 +476,9 @@ const Hero = () => {
               {/* Button content */}
               <span className="relative z-10">Let's Explore</span>
               <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1 relative z-10" />
-            </motion.button>
+        </motion.button>
           </motion.div>
-        </div>
+      </div>
       </section>
     </div>
   );

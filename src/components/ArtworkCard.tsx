@@ -20,7 +20,7 @@ const ArtworkCard: React.FC<Props> = ({
   imageHasError = false,
   fallbackImage
 }) => {
-  const { lightingMode } = useStore();
+  const { isDarkMode } = useStore();
   const [dominantColors, setDominantColors] = useState<string[]>([]);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -79,18 +79,6 @@ const ArtworkCard: React.FC<Props> = ({
 
     return () => clearTimeout(timer);
   }, [imageLoaded, useFallback, fallbackFailed]);
-
-  // Lighting effect
-  const getLightingStyles = () => {
-    switch (lightingMode) {
-      case 'dim':
-        return 'brightness-75 contrast-110';
-      case 'spotlight':
-        return 'brightness-110 contrast-125 saturate-110 drop-shadow-xl';
-      default:
-        return 'brightness-100 contrast-100';
-    }
-  };
 
   // Primary image handlers
   const handleLoad = () => {
@@ -163,7 +151,7 @@ const ArtworkCard: React.FC<Props> = ({
             ref={imgRef}
             src={imageSrc}
             alt={artwork.title}
-            className={`w-full h-full object-cover transition-all duration-500 ${getLightingStyles()} ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-cover transition-all duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
             initial={{ scale: 1 }}
             whileHover={{ scale: 1.05 }}
             transition={{ duration: 0.4 }}

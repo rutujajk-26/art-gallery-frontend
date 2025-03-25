@@ -37,7 +37,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  const navItems = ['Home', 'Gallery', 'Exhibitions', '3D Exhibition', 'About', 'Contact'];
+  const navItems = ['Home', 'Gallery', '3D Exhibition', 'Contact'];
   
   // Optimized scroll handler
   useEffect(() => {

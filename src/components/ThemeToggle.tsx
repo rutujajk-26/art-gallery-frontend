@@ -3,37 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, Settings, ChevronDown } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
-// Floating theme toggle button with enhanced UI
-const FloatingThemeButton = memo(({ 
-  isDarkMode,
-  toggleTheme
-}: { 
-  isDarkMode: boolean;
-  toggleTheme: () => void;
-}) => (
-  <motion.button
-    whileHover={{ scale: 1.1, boxShadow: "0px 5px 15px rgba(0, 0, 0, 0.2)" }}
-    whileTap={{ scale: 0.95 }}
-    onClick={toggleTheme}
-    className={`p-2.5 sm:p-3.5 rounded-full shadow-lg transition-all duration-300 ${
-      isDarkMode
-        ? 'bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border border-indigo-500 shadow-indigo-900/30'
-        : 'bg-gradient-to-br from-amber-300 to-amber-500 text-gray-900 border border-amber-300 shadow-amber-900/20'
-    }`}
-    title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-    aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-  >
-    <div className="relative flex items-center justify-center">
-      {isDarkMode ? (
-        <Sun className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-sm" />
-      ) : (
-        <Moon className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-sm" />
-      )}
-      <span className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-    </div>
-  </motion.button>
-));
-
 // Enhanced theme toggle component with better responsiveness
 const ThemeToggle = () => {
   const { isDarkMode, setDarkMode } = useStore();

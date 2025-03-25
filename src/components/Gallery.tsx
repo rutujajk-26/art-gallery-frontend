@@ -3,7 +3,8 @@ import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import ArtworkCard from './ArtworkCard';
 import { Artwork, ArtworkCategory } from '../types/artwork';
-import { ChevronLeft, ChevronRight, Search, X, ArrowRight, ImageOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X, ArrowRight, ImageOff, Sparkles, BrainCircuit, Headphones } from 'lucide-react';
+import { searchArtworksByDescription, getArtworkInsights } from '../utils/geminiApi';
 
 // Fallback images by category in case primary images fail to load
 const fallbackImages = {
@@ -414,7 +415,7 @@ const verifyImageLoads = (url: string): Promise<boolean> => {
 };
 
 const Gallery = () => {
-  const { isDarkMode, lightingMode } = useStore();
+  const { isDarkMode } = useStore();
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -434,6 +435,15 @@ const Gallery = () => {
   const [scrollPosition, setScrollPosition] = useState(0);
   const maxScroll = useRef(0);
   const activeButtonRef = useRef<HTMLDivElement>(null);
+
+  // AI-related state
+  const [isAiSearch, setIsAiSearch] = useState(false);
+  const [aiSearchResults, setAiSearchResults] = useState<string[]>([]);
+  const [isAiSearchLoading, setIsAiSearchLoading] = useState(false);
+  const [aiArtworkInsights, setAiArtworkInsights] = useState<string>('');
+  const [isInsightsLoading, setIsInsightsLoading] = useState(false);
+  const [aiVoiceActive, setAiVoiceActive] = useState(false);
+  const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Check all artwork images on component mount
   useEffect(() => {
@@ -493,6 +503,19 @@ const Gallery = () => {
     setPreloadedImages(imagesToPreload);
     
     return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  // Force header visibility when navigation occurs
+  useEffect(() => {
+    // Force repaint of gallery header when component mounts or route changes
+    const galleryHeader = document.querySelector('.gallery-header');
+    if (galleryHeader) {
+      // Force a repaint by temporarily changing a style property
+      galleryHeader.classList.add('force-visible');
+      setTimeout(() => {
+        galleryHeader.classList.remove('force-visible');
+      }, 100);
+    }
   }, []);
 
   // Handle image loading errors
@@ -644,30 +667,74 @@ const Gallery = () => {
   // Clear search with optimized state updates
   const clearSearch = useCallback(() => {
     setSearchQuery('');
+    setAiSearchResults([]);
     if (searchInputRef.current) {
       searchInputRef.current.focus();
       setSearchFocused(true);
     }
   }, []);
 
+  // Toggle AI search
+  const toggleAiSearch = useCallback(() => {
+    setIsAiSearch(prev => {
+      const newState = !prev;
+      // Reset search results when turning off AI search
+      if (!newState) {
+        setAiSearchResults([]);
+      }
+      return newState;
+    });
+  }, []);
+
   // Handle search submission
-  const handleSearchSubmit = useCallback((e: React.FormEvent) => {
+  const handleSearchSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       // Add to recent searches if not already there
       if (!recentSearches.includes(searchQuery.trim()) && searchQuery.trim().length > 0) {
         setRecentSearches(prev => [searchQuery.trim(), ...prev.slice(0, 2)]);
       }
+      
+      // If AI search is enabled, use AI to find artworks
+      if (isAiSearch && searchQuery.trim().length > 0) {
+        setIsAiSearchLoading(true);
+        setSearchLoading(true);
+        
+        try {
+          const aiResults = await searchArtworksByDescription(
+            searchQuery.trim(),
+            artworks.map(art => ({
+              id: art.id.toString(),
+              title: art.title,
+              artist: art.artist,
+              year: art.year,
+              description: art.description
+            }))
+          );
+          
+          setAiSearchResults(aiResults);
+        } catch (error) {
+          console.error('Error with AI search:', error);
+          setAiSearchResults([]);
+        } finally {
+          setIsAiSearchLoading(false);
+          setSearchLoading(false);
+        }
+      }
     }
-  }, [searchQuery, recentSearches]);
+  }, [searchQuery, recentSearches, isAiSearch]);
 
   // Apply a recent search with optimized callback
   const applyRecentSearch = useCallback((search: string) => {
     setSearchQuery(search);
+    // Clear any previous AI search results when applying a new search
+    if (isAiSearch) {
+      setAiSearchResults([]);
+    }
     if (searchInputRef.current) {
       searchInputRef.current.focus();
     }
-  }, []);
+  }, [isAiSearch]);
 
   // Memoize filtered artworks to improve performance
   const filteredArtworks = useMemo(() => {
@@ -681,8 +748,13 @@ const Gallery = () => {
       );
     }
     
-    // Apply search filter if there's a search query
-    if (searchQuery.trim()) {
+    // Apply AI search results if available
+    if (isAiSearch && aiSearchResults.length > 0) {
+      const artworkIds = aiSearchResults.map(id => parseInt(id));
+      filtered = filtered.filter(artwork => artworkIds.includes(artwork.id));
+    }
+    // Otherwise apply regular search filter if there's a search query
+    else if (searchQuery.trim() && !isAiSearchLoading) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(artwork => 
         artwork.title.toLowerCase().includes(query) ||
@@ -693,7 +765,27 @@ const Gallery = () => {
     }
     
     return filtered;
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, isAiSearch, aiSearchResults, isAiSearchLoading]);
+
+  // Get message for no results state
+  const noResultsMessage = useMemo(() => {
+    if (isAiSearchLoading) {
+      return "AI is searching for artworks that match your description...";
+    }
+    
+    if (isAiSearch && searchQuery) {
+      if (aiSearchResults.length === 0) {
+        return `AI couldn't find artworks matching "${searchQuery}". Try a different description.`;
+      }
+      return `No artworks found matching your AI search: "${searchQuery}"`;
+    }
+    
+    if (searchQuery) {
+      return `No artworks found matching "${searchQuery}"`;
+    }
+    
+    return "No artworks found in this category";
+  }, [searchQuery, isAiSearch, aiSearchResults.length, isAiSearchLoading]);
 
   // Animation variants with reduced motion awareness
   const containerVariants = useMemo(() => ({
@@ -715,28 +807,101 @@ const Gallery = () => {
     }
   }), [isReducedMotion]);
   
-  // Memoize lighting styles to improve performance
-  const getLightingStyles = useCallback(() => {
-    switch (lightingMode) {
-      case 'dim':
-        return 'bg-gray-900 text-white bg-opacity-95';
-      case 'spotlight':
-        return `bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white`;
-      default:
-        return isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900';
-    }
-  }, [lightingMode, isDarkMode]);
+  // Memoize theme styles
+  const getThemeStyles = useCallback(() => {
+    return isDarkMode 
+      ? 'bg-gray-900 text-white transition-colors duration-500 ease-in-out' 
+      : 'bg-gray-50 text-gray-900 transition-colors duration-500 ease-in-out';
+  }, [isDarkMode]);
 
   // Handle filter button click - optimized callback
   const handleCategoryClick = useCallback((category: string) => {
     setSelectedCategory(category);
   }, []);
 
+  // Fetch AI insights for artwork details
+  const fetchArtworkInsights = useCallback(async (artwork: Artwork) => {
+    setIsInsightsLoading(true);
+    
+    try {
+      const insights = await getArtworkInsights({
+        title: artwork.title,
+        artist: artwork.artist,
+        year: artwork.year,
+        description: artwork.description
+      });
+      
+      setAiArtworkInsights(insights);
+    } catch (error) {
+      console.error('Error fetching AI insights:', error);
+      setAiArtworkInsights('Sorry, I couldn\'t generate insights for this artwork at the moment.');
+    } finally {
+      setIsInsightsLoading(false);
+    }
+  }, []);
+
+  // Handle artwork details read aloud
+  const handleAiVoiceRead = useCallback(() => {
+    if (aiVoiceActive) {
+      // Stop current voice
+      window.speechSynthesis.cancel();
+      setAiVoiceActive(false);
+      return;
+    }
+    
+    if (!selectedArtwork || !aiArtworkInsights) return;
+    
+    // Create content to read
+    const textToRead = `${selectedArtwork.title} by ${selectedArtwork.artist}, ${selectedArtwork.year}. 
+                        ${aiArtworkInsights}`;
+    
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(textToRead);
+      
+      // Configure voice settings
+      utterance.rate = 0.9; // Slightly slower
+      utterance.pitch = 1.0; // Natural pitch
+      
+      // Get available voices and try to select a good one
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(
+        voice => voice.lang === 'en-US' && voice.name.includes('Female')
+      );
+      
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+      
+      // Handle speech end
+      utterance.onend = () => {
+        setAiVoiceActive(false);
+      };
+      
+      speechSynthRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+      setAiVoiceActive(true);
+    } else {
+      console.warn('Speech synthesis not supported in this browser');
+    }
+  }, [selectedArtwork, aiArtworkInsights, aiVoiceActive]);
+  
+  // Clean up voice synthesis on unmount or when closing modal
+  useEffect(() => {
+    return () => {
+      if (speechSynthRef.current) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+  
   // Handle opening and closing the modal - optimized callbacks
   const handleArtworkClick = useCallback((artwork: Artwork) => {
     setSelectedArtwork(artwork);
     // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
+    
+    // Fetch AI insights for the selected artwork
+    fetchArtworkInsights(artwork);
     
     // Preload next few images in that category for smoother browsing
     const categoryArtworks = artworks.filter(a => a.category === artwork.category);
@@ -754,13 +919,22 @@ const Gallery = () => {
         setPreloadedImages(prevImages => [...new Set([...prevImages, ...nextImages])]);
       }
     }
-  }, []);
+  }, [fetchArtworkInsights]);
 
   const handleCloseModal = useCallback(() => {
     setSelectedArtwork(null);
     // Re-enable scrolling
     document.body.style.overflow = 'auto';
-  }, []);
+    
+    // Stop any ongoing speech
+    if (aiVoiceActive) {
+      window.speechSynthesis.cancel();
+      setAiVoiceActive(false);
+    }
+    
+    // Reset state
+    setAiArtworkInsights('');
+  }, [aiVoiceActive]);
 
   // Get fallback image URL by artwork ID
   const getFallbackImage = useCallback((artwork: Artwork): string => {
@@ -772,12 +946,12 @@ const Gallery = () => {
     <section 
       ref={sectionRef}
       id="gallery"
-      className={`min-h-screen pt-16 sm:pt-20 transition-colors duration-300 ${getLightingStyles()}`}
+      className={`min-h-screen pt-16 sm:pt-20 transition-colors duration-300 ${getThemeStyles()}`}
     >
       {/* Preload important images */}
       <ImagePreloader imagesToPreload={preloadedImages} />
       
-      <div className="container mx-auto px-2 sm:px-4 md:px-6">
+      <div className="container mx-auto px-2 sm:px-4 md:px-6 relative">
         {/* Show loading indicator if initial images are still being verified */}
         {imagesLoading && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 backdrop-blur-sm">
@@ -788,16 +962,31 @@ const Gallery = () => {
           </div>
         )}
         
+        {/* Gallery Header - Made more stable with more specific classes */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          initial={{ opacity: 0.8, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-6 sm:mb-8"
+          className="gallery-header relative text-center mb-12 sm:mb-16 overflow-hidden rounded-xl h-[300px] md:h-[350px] shadow-lg [visibility:visible] [opacity:1] [z-index:10] [backface-visibility:hidden] [transform:translateZ(0)]"
+          style={{ willChange: 'transform' }}
         >
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6">Art Gallery</h2>
-          <p className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto opacity-80 px-2">
-            Explore our curated selection of masterpieces from renowned artists throughout history
-          </p>
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="w-full h-full">
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg" 
+                alt="Gallery background" 
+                className="w-full h-full object-cover filter blur-[2px]" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-60"></div>
+            </div>
+          </div>
+          
+          <div className="relative z-10 h-full flex flex-col items-center justify-center px-4">
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4 sm:mb-6 text-white drop-shadow-lg">Art Gallery</h2>
+            <p className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto text-white opacity-95 px-2 drop-shadow-md">
+              Explore our curated selection of masterpieces from renowned artists throughout history
+            </p>
+          </div>
         </motion.div>
         
         {/* Enhanced Search Bar - now with better responsive design */}
@@ -824,27 +1013,38 @@ const Gallery = () => {
                   : 'bg-white border-gray-200'
               } rounded-lg border shadow-lg flex items-center p-2 transition-all duration-300 ${
                 searchFocused ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
-              }`}
+              } ${isAiSearch ? 'border-purple-500 dark:border-purple-700' : ''}`}
             >
               <motion.div
                 animate={{ rotate: searchLoading ? 360 : 0 }}
                 transition={{ duration: 1, repeat: searchLoading ? Infinity : 0, ease: "linear" }}
                 className="mx-2"
               >
-                <Search className={`w-4 h-4 sm:w-5 sm:h-5 ${searchLoading ? 'text-blue-500' : 'text-gray-500'}`} />
+                {isAiSearch ? (
+                  <BrainCircuit className={`w-4 h-4 sm:w-5 sm:h-5 ${searchLoading ? 'text-purple-500' : 'text-purple-500'}`} />
+                ) : (
+                  <Search className={`w-4 h-4 sm:w-5 sm:h-5 ${searchLoading ? 'text-blue-500' : 'text-gray-500'}`} />
+                )}
               </motion.div>
               
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder={window.innerWidth < 480 ? "Search... (Ctrl+K)" : "Search by title, artist, or style... (Ctrl+K)"}
+                placeholder={isAiSearch 
+                  ? "Describe what you're looking for in natural language..." 
+                  : window.innerWidth < 480 
+                    ? "Search... (Ctrl+K)" 
+                    : "Search by title, artist, or style... (Ctrl+K)"
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 100)}
                 className={`flex-1 py-1 sm:py-2 px-1 sm:px-2 outline-none ${
                   isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
-                } transition-all duration-300 text-xs sm:text-sm md:text-base`}
+                } transition-all duration-300 text-xs sm:text-sm md:text-base ${
+                  isAiSearch ? 'placeholder-purple-400 dark:placeholder-purple-500' : ''
+                }`}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
                     e.preventDefault();
@@ -897,6 +1097,17 @@ const Gallery = () => {
                   </div>
                 )}
               </AnimatePresence>
+              
+              {/* AI status indicator */}
+              {isAiSearch && searchLoading && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="absolute -top-10 left-0 right-0 bg-purple-500 text-white text-xs text-center py-1.5 px-3 rounded-lg shadow-md"
+                >
+                  AI is analyzing your search...
+                </motion.div>
+              )}
             </motion.form>
             
             {/* Recent searches dropdown */}
@@ -930,7 +1141,11 @@ const Gallery = () => {
                         onClick={() => applyRecentSearch(search)}
                       >
                         <div className="flex items-center">
-                          <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500 mr-2" />
+                          {isAiSearch ? (
+                            <BrainCircuit className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-500 mr-2" />
+                          ) : (
+                            <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500 mr-2" />
+                          )}
                           <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                             {search}
                           </span>
@@ -944,7 +1159,7 @@ const Gallery = () => {
             </AnimatePresence>
           </motion.div>
           
-          <div className="flex justify-center mt-2">
+          <div className="flex justify-center mt-2 space-x-2">
             <motion.button
               onClick={toggleSearch}
               whileHover={{ scale: 1.05 }}
@@ -971,9 +1186,36 @@ const Gallery = () => {
                 )}
               </span>
             </motion.button>
+            
+            {isSearchOpen && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={toggleAiSearch}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className={`text-xs sm:text-sm flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors shadow-sm ${
+                  isAiSearch
+                    ? isDarkMode 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-purple-500 text-white'
+                    : isDarkMode 
+                      ? 'bg-gray-700 text-white' 
+                      : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                <BrainCircuit className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                <span>
+                  {isAiSearch ? 'AI Search On' : 'AI Search Off'}
+                </span>
+                {isAiSearchLoading && (
+                  <span className="ml-1 w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                )}
+              </motion.button>
+            )}
           </div>
         </div>
-        
+
         {/* Optimized navbar with better responsiveness */}
         <div className="relative mb-6 sm:mb-8 overflow-hidden mx-auto">
           {/* Left scroll button */}
@@ -1041,7 +1283,9 @@ const Gallery = () => {
         >
           <h3 className="text-lg sm:text-xl md:text-2xl font-bold">
             {searchQuery 
-              ? `Search results for "${searchQuery}"` 
+              ? isAiSearch 
+                ? `AI search results for "${searchQuery}"` 
+                : `Search results for "${searchQuery}"` 
               : selectedCategory === "All" 
                 ? "All Artworks" 
                 : selectedCategory
@@ -1051,14 +1295,21 @@ const Gallery = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.7 }}
             transition={{ delay: 0.2 }}
-            className="text-xs sm:text-sm mt-1 sm:mt-2"
+            className="text-xs sm:text-sm mt-1 sm:mt-2 flex items-center justify-center"
           >
-            {filteredArtworks.length} artwork{filteredArtworks.length !== 1 ? 's' : ''} found
+            {isAiSearchLoading ? (
+              <>
+                <span className="mr-2">AI is analyzing your query</span>
+                <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+              </>
+            ) : (
+              <>{filteredArtworks.length} artwork{filteredArtworks.length !== 1 ? 's' : ''} found</>
+            )}
           </motion.p>
           
           {/* Animated underline for active category */}
           <motion.div 
-            className="h-0.5 bg-blue-500 w-12 sm:w-16 md:w-20 mx-auto mt-1 sm:mt-2"
+            className={`h-0.5 w-12 sm:w-16 md:w-20 mx-auto mt-1 sm:mt-2 ${isAiSearch ? 'bg-purple-500' : 'bg-blue-500'}`}
             initial={{ width: 0 }}
             animate={{ width: window.innerWidth < 640 ? (window.innerWidth < 400 ? '48px' : '64px') : '80px' }}
             transition={{ delay: 0.1, duration: 0.3 }}
@@ -1088,7 +1339,7 @@ const Gallery = () => {
                 />
               </motion.div>
             ))
-          ) : (
+          ) :
             <motion.div 
               variants={{
                 hidden: { opacity: 0 },
@@ -1096,24 +1347,108 @@ const Gallery = () => {
               }}
               className="col-span-1 xs:col-span-2 lg:col-span-3 text-center py-8 sm:py-12 md:py-16"
             >
-              <p className="text-base sm:text-lg md:text-xl opacity-70">
-                {searchQuery 
-                  ? `No artworks found matching "${searchQuery}"`
-                  : "No artworks found in this category"
-                }
-              </p>
-              {searchQuery && (
-                <motion.button 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  onClick={clearSearch}
-                  className="mt-4 px-3 sm:px-4 py-1 sm:py-1.5 md:py-2 bg-blue-600 text-white text-xs sm:text-sm md:text-base rounded-md hover:bg-blue-700 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Clear Search
-                </motion.button>
+              {isAiSearchLoading ? (
+                <div className="flex flex-col items-center">
+                  <div className="w-16 h-16 mb-4 relative">
+                    <div className="absolute inset-0 rounded-full border-4 border-purple-300 border-opacity-25"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-t-purple-500 animate-spin"></div>
+                    <BrainCircuit className="absolute inset-0 m-auto w-8 h-8 text-purple-500" />
+                  </div>
+                  <p className="text-base sm:text-lg md:text-xl opacity-70">
+                    AI is analyzing your search query...
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto">
+                    Our AI model is searching for artworks that match your description. This might take a few seconds.
+                  </p>
+                </div>
+              ) :
+                <>
+                  <p className="text-base sm:text-lg md:text-xl opacity-70">
+                    {noResultsMessage}
+                  </p>
+                  {searchQuery && (
+                    <motion.button 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      onClick={clearSearch}
+                      className="mt-4 px-3 sm:px-4 py-1 sm:py-1.5 md:py-2 bg-blue-600 text-white text-xs sm:text-sm md:text-base rounded-md hover:bg-blue-700 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Clear Search
+                    </motion.button>
+                  )}
+                </>
+              }
+            </motion.div>
+          }
+        </motion.div>
+
+        {/* Artwork grid with enhanced responsiveness for all screen sizes */}
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 xs:gap-4 sm:gap-5 md:gap-6 px-2 sm:px-4"
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+        >
+          {filteredArtworks.length > 0 ? (
+            filteredArtworks.map((artwork) => (
+              <motion.div
+                key={artwork.id}
+                variants={cardVariants}
+                className="animate-fadeIn"
+              >
+                <ArtworkCard
+                  artwork={artwork}
+                  onClick={() => handleArtworkClick(artwork)}
+                  onImageError={() => handleImageError(artwork.id)}
+                  imageHasError={failedImages.has(artwork.id)}
+                  fallbackImage={getFallbackImage(artwork)}
+                />
+              </motion.div>
+            ))
+          ) : (
+            <motion.div 
+              variants={{
+                hidden: { opacity: 0 },
+                visible: { opacity: 1 }
+              }}
+              className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4 2xl:col-span-5 text-center py-8 sm:py-12 md:py-16"
+            >
+              {isAiSearchLoading ? (
+                <div className="flex flex-col items-center">
+                  <div className="w-16 h-16 mb-4 relative">
+                    <div className="absolute inset-0 rounded-full border-4 border-purple-300 border-opacity-25"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-t-purple-500 animate-spin"></div>
+                    <BrainCircuit className="absolute inset-0 m-auto w-8 h-8 text-purple-500" />
+                  </div>
+                  <p className="text-base sm:text-lg md:text-xl opacity-70">
+                    AI is analyzing your search query...
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto">
+                    Our AI model is searching for artworks that match your description. This might take a few seconds.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-base sm:text-lg md:text-xl opacity-70">
+                    {noResultsMessage}
+                  </p>
+                  {searchQuery && (
+                    <motion.button 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      onClick={clearSearch}
+                      className="mt-4 px-3 sm:px-4 py-1 sm:py-1.5 md:py-2 bg-blue-600 text-white text-xs sm:text-sm md:text-base rounded-md hover:bg-blue-700 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Clear Search
+                    </motion.button>
+                  )}
+                </>
               )}
             </motion.div>
           )}
@@ -1153,9 +1488,9 @@ const Gallery = () => {
                         </div>
                       </div>
                     ) : (
-                      <img
-                        src={selectedArtwork.image}
-                        alt={selectedArtwork.title}
+              <img
+                src={selectedArtwork.image}
+                alt={selectedArtwork.title}
                         className="w-full h-full object-cover"
                         loading="eager" 
                         onError={() => handleImageError(selectedArtwork.id)}
@@ -1177,9 +1512,43 @@ const Gallery = () => {
                     <div className="bg-gray-100 dark:bg-gray-700 p-2 sm:p-3 md:p-4 rounded-lg mb-3 sm:mb-4 md:mb-6 max-h-24 xs:max-h-32 sm:max-h-36 md:max-h-48 overflow-y-auto">
                       <p className="text-xs xs:text-xs sm:text-sm md:text-base text-gray-800 dark:text-gray-200">{selectedArtwork.description}</p>
                     </div>
+                    
+                    {/* AI Insights Section */}
+                    <div className="mb-4 bg-purple-50 dark:bg-gray-800 p-3 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm sm:text-base font-semibold text-purple-700 dark:text-purple-400 flex items-center">
+                          <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                          AI Art Insights
+                        </h4>
+                        
+                        <button
+                          onClick={handleAiVoiceRead}
+                          disabled={isInsightsLoading || !aiArtworkInsights}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                            aiVoiceActive
+                              ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300'
+                              : 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300'
+                          } disabled:opacity-50`}
+                        >
+                          <Headphones className="w-3 h-3" />
+                          {aiVoiceActive ? 'Stop Audio' : 'Listen'}
+                        </button>
+                      </div>
+                      
+                      {isInsightsLoading ? (
+                        <div className="flex items-center justify-center py-3">
+                          <div className="w-5 h-5 border-2 border-t-transparent border-purple-500 rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <p className="text-xs xs:text-xs sm:text-sm text-gray-700 dark:text-gray-300 italic">
+                          {aiArtworkInsights || "AI insights could not be generated."}
+                        </p>
+                      )}
+                    </div>
+                    
                     <div className="mt-auto space-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                      <p>Medium: {selectedArtwork.medium}</p>
-                      <p>Dimensions: {selectedArtwork.dimensions}</p>
+                  <p>Medium: {selectedArtwork.medium}</p>
+                  <p>Dimensions: {selectedArtwork.dimensions}</p>
                       <p>Category: {selectedArtwork.category}</p>
                       <div className="flex flex-wrap gap-1 sm:gap-2 mt-2 sm:mt-3 md:mt-4">
                         {selectedArtwork.tags.map(tag => (
@@ -1201,7 +1570,7 @@ const Gallery = () => {
                 </div>
               </motion.div>
             </motion.div>
-          )}
+        )}
         </AnimatePresence>
       </div>
     </section>
