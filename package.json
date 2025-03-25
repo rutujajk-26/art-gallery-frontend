@@ -12,8 +12,8 @@
   "dependencies": {
     "@headlessui/react": "^1.7.18",
     "@react-spring/web": "^9.7.3",
-    "@react-three/drei": "^10.0.5",
-    "@react-three/fiber": "^9.1.0",
+    "@react-three/drei": "^9.99.0",
+    "@react-three/fiber": "^8.15.19",
     "@studio-freight/lenis": "^1.0.42",
     "colorthief": "^2.4.0",
     "framer-motion": "^11.18.2",
