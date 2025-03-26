@@ -1,6 +1,7 @@
 // This file is for fixing Rollup issues on Vercel deployment
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+
 
 try {
   console.log('Starting Rollup fix script...');
