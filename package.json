@@ -13,7 +13,9 @@
     "vercel-build": "npm run fix-rollup && tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "postinstall": "node -e \"if (process.platform === 'win32') { require('child_process').execSync('npm install @rollup/rollup-win32-x64-msvc --save-dev', { stdio: 'inherit' }); }\""
+    "install:win": "npm install @rollup/rollup-win32-x64-msvc --save-dev",
+    "install:linux": "npm install @rollup/rollup-linux-x64-gnu --save-dev",
+    "postinstall": "node -e \"if (process.platform === 'win32') { require('child_process').execSync('npm run install:win', { stdio: 'inherit' }); } else if (process.platform === 'linux') { require('child_process').execSync('npm run install:linux', { stdio: 'inherit' }); }\""
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
@@ -51,9 +53,6 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
     "vite": "^5.1.4"
-  },
-  "optionalDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.37.0"
   },
   "engines": {
     "node": "16.x || 18.x || 20.x"
