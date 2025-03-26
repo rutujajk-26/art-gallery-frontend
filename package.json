@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "fix-rollup": "node rollup-fix.js",
+    "fix-rollup": "node rollup-fix.cjs",
     "prebuild": "npm run fix-rollup",
     "build": "tsc && vite build",
     "postbuild": "node -e \"const fs=require('fs');['_redirects','netlify.toml'].forEach(f=>fs.copyFileSync(f,'dist/'+f));\"",
