@@ -8,6 +8,15 @@ The website also have AI which helps in Story Telling, helping with Additional I
 
 **Demo Video**: 
 
+https://github.com/rutujajk-26/art-gallery-frontend/blob/main/Gifs/ScreenRecording2025-03-29001546-ezgif.com-video-to-gif-converter%20(1).gif
+
+https://github.com/rutujajk-26/art-gallery-frontend/blob/main/Gifs/ScreenRecording2025-03-29001546-ezgif.com-video-to-gif-converter%20(2).gif
+
+https://github.com/rutujajk-26/art-gallery-frontend/blob/main/Gifs/ScreenRecording2025-03-29001546-ezgif.com-video-to-gif-converter%20(3).gif
+
+https://github.com/rutujajk-26/art-gallery-frontend/blob/main/Gifs/ScreenRecording2025-03-29001546-ezgif.com-video-to-gif-converter.gif
+
+
 ## Features
 Interactive homepage with engaging animations  
 Virtual art gallery with hover effects  
