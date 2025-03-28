@@ -27,8 +27,8 @@ AI information about Paintings
 
 ### Clone the Repository
 ```sh
-git clone https://github.com/yourusername/ArtVistas.git
-cd ArtVistas
+git clone https://github.com/rutujajk-26/art-gallery-frontend.git
+cd art-gallery-frontend
 ```
 ### Install Dependencies
 ```sh
@@ -37,3 +37,10 @@ npm install
 ### Run the Application
 ```sh
 npm run dev
+```
+
+
+## Future Improvements
+- Expand the gallery with more museum Paintings and More 3D Museum Walkthrough
+- Improve the AI of the website and add a personal AI
+- Enhance accessibility & performance optimizations
